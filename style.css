@@ -16,3 +16,9 @@ body {
   font-size: 16px;
   cursor: pointer;
 }
+
+#version {
+  margin-top: 5px;
+  font-size: 12px;
+  color: #555;
+}
