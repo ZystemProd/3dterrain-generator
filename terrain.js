@@ -31,15 +31,22 @@ async function fetchElevationGrid(bounds, rows = 10, cols = 10) {
     const lat = sw.lat() + latStep * y;
     for (let x = 0; x < cols; x++) {
       const lng = sw.lng() + lngStep * x;
-      locations.push(`${lat},${lng}`);
+      locations.push({ lat, lng });
     }
   }
-  const url = `https://maps.googleapis.com/maps/api/elevation/json?locations=${locations.join(
-    "|"
-  )}&key=AIzaSyAWIgLIbZ2X_FQ7GOI0Iw8RVBHRVc0GbJE`;
-  const res = await fetch(url);
-  const json = await res.json();
-  const heights = json.results.map((r) => r.elevation);
+
+  const service = new google.maps.ElevationService();
+  const results = await new Promise((resolve, reject) => {
+    service.getElevationForLocations({ locations }, (res, status) => {
+      if (status === "OK") {
+        resolve(res);
+      } else {
+        reject(status);
+      }
+    });
+  });
+
+  const heights = results.map((r) => r.elevation);
   const grid = [];
   for (let y = 0; y < rows; y++) {
     const row = [];
