@@ -34,7 +34,9 @@ async function fetchElevationGrid(bounds, rows = 10, cols = 10) {
       locations.push(`${lat},${lng}`);
     }
   }
-  const url = `https://maps.googleapis.com/maps/api/elevation/json?locations=${locations.join("|")}&key=YOUR_API_KEY`;
+  const url = `https://maps.googleapis.com/maps/api/elevation/json?locations=${locations.join(
+    "|"
+  )}&key=AIzaSyAWIgLIbZ2X_FQ7GOI0Iw8RVBHRVc0GbJE`;
   const res = await fetch(url);
   const json = await res.json();
   const heights = json.results.map((r) => r.elevation);
