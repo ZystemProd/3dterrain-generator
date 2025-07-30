@@ -1,47 +1,52 @@
-mapboxgl.accessToken = "YOUR_MAPBOX_ACCESS_TOKEN";
+let map;
+let rectangle;
 
-const map = new mapboxgl.Map({
-  container: "map",
-  style: "mapbox://styles/mapbox/satellite-v9",
-  center: [10, 50],
-  zoom: 6,
-});
+function initMap() {
+  map = new google.maps.Map(document.getElementById("map"), {
+    center: { lat: 50, lng: 10 },
+    zoom: 6,
+    mapTypeId: "satellite",
+  });
 
-// Enable drawing of a bounding box
-const draw = new MapboxDraw({
-  displayControlsDefault: false,
-  controls: {
-    polygon: true,
-    trash: true,
-  },
-});
-map.addControl(draw);
-
-// Simple placeholder heightmap
-function generatePlaceholderHeightmap(width, height) {
-  const data = [];
-  for (let y = 0; y < height; y++) {
-    const row = [];
-    for (let x = 0; x < width; x++) {
-      row.push(Math.random() * 10);
-    }
-    data.push(row);
-  }
-  return data;
+  rectangle = new google.maps.Rectangle({
+    bounds: {
+      north: 50.5,
+      south: 49.5,
+      east: 10.5,
+      west: 9.5,
+    },
+    editable: true,
+    draggable: true,
+    map,
+  });
 }
 
-function computeBBox(feature) {
-  let minX = Infinity,
-    minY = Infinity,
-    maxX = -Infinity,
-    maxY = -Infinity;
-  feature.geometry.coordinates[0].forEach((c) => {
-    if (c[0] < minX) minX = c[0];
-    if (c[0] > maxX) maxX = c[0];
-    if (c[1] < minY) minY = c[1];
-    if (c[1] > maxY) maxY = c[1];
-  });
-  return [minX, minY, maxX, maxY];
+async function fetchElevationGrid(bounds, rows = 10, cols = 10) {
+  const ne = bounds.getNorthEast();
+  const sw = bounds.getSouthWest();
+  const latStep = (ne.lat() - sw.lat()) / (rows - 1);
+  const lngStep = (ne.lng() - sw.lng()) / (cols - 1);
+  const locations = [];
+  for (let y = 0; y < rows; y++) {
+    const lat = sw.lat() + latStep * y;
+    for (let x = 0; x < cols; x++) {
+      const lng = sw.lng() + lngStep * x;
+      locations.push(`${lat},${lng}`);
+    }
+  }
+  const url = `https://maps.googleapis.com/maps/api/elevation/json?locations=${locations.join("|")}&key=YOUR_API_KEY`;
+  const res = await fetch(url);
+  const json = await res.json();
+  const heights = json.results.map((r) => r.elevation);
+  const grid = [];
+  for (let y = 0; y < rows; y++) {
+    const row = [];
+    for (let x = 0; x < cols; x++) {
+      row.push(heights[y * cols + x]);
+    }
+    grid.push(row);
+  }
+  return grid;
 }
 
 function trianglesForCell(h00, h10, h01, h11, x, y, size) {
@@ -75,7 +80,15 @@ function heightmapToSTL(heightmap, cellSize = 1) {
       const h10 = heightmap[x + 1][y];
       const h01 = heightmap[x][y + 1];
       const h11 = heightmap[x + 1][y + 1];
-      const tris = trianglesForCell(h00, h10, h01, h11, x * cellSize, y * cellSize, cellSize);
+      const tris = trianglesForCell(
+        h00,
+        h10,
+        h01,
+        h11,
+        x * cellSize,
+        y * cellSize,
+        cellSize
+      );
       tris.forEach((tri) => {
         const n = normal(tri[0], tri[1], tri[2]);
         stl += `facet normal ${n[0]} ${n[1]} ${n[2]}\n`;
@@ -105,17 +118,8 @@ function downloadSTL(data, filename) {
 }
 
 document.getElementById("generateBtn").addEventListener("click", async () => {
-  let bbox;
-  const drawn = draw.getAll();
-  if (drawn.features.length > 0) {
-    bbox = computeBBox(drawn.features[0]);
-  } else {
-    const b = map.getBounds();
-    bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
-  }
-  console.log("Using bounding box", bbox);
-  const heightmap = generatePlaceholderHeightmap(10, 10);
+  const bounds = rectangle.getBounds();
+  const heightmap = await fetchElevationGrid(bounds, 10, 10);
   const stl = heightmapToSTL(heightmap, 1);
   downloadSTL(stl, "terrain.stl");
 });
-
